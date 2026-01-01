@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "builds": [
+    { "src": "api/index.py", "use": "@vercel/python" },
+    { "src": "public/**", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/index.py" },
+    { "src": "/(.*)", "dest": "/public/$1" }
+  ],
+  "env": {
+    "PYTHON_VERSION": "3.9"
+  },
+  "buildCommand": "pip install -r requirements.txt"
+}

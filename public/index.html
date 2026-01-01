@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord Exporter Pro - API</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 16px;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px 30px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .checkbox-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .checkbox-item label {
+            margin: 0;
+            text-transform: none;
+            font-weight: normal;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+
+        button {
+            flex: 1;
+            padding: 14px 28px;
+            font-size: 16px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-export {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-export:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-export:active {
+            transform: translateY(0);
+        }
+
+        .btn-export:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-reset {
+            background: #f0f0f0;
+            color: #333;
+            border: 2px solid #e0e0e0;
+        }
+
+        .btn-reset:hover {
+            background: #e0e0e0;
+        }
+
+        .status {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .status.show {
+            display: block;
+        }
+
+        .status.success {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            color: #721c24;
+        }
+
+        .status.loading {
+            background: #d1ecf1;
+            border: 2px solid #17a2b8;
+            color: #0c5460;
+        }
+
+        .status h3 {
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .status p {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+
+        .file-list {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .file-item {
+            padding: 8px;
+            background: white;
+            margin: 5px 0;
+            border-radius: 4px;
+            font-size: 13px;
+            word-break: break-all;
+            border-left: 4px solid #667eea;
+            padding-left: 12px;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top-color: #667eea;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .api-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            font-size: 14px;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #dc3545;
+        }
+
+        .status-indicator.connected {
+            background: #28a745;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+
+            .checkbox-group {
+                grid-template-columns: 1fr;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .header h1 {
+                font-size: 24px;
+            }
+
+            .content {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📤 Discord Exporter Pro</h1>
+            <p>Exporta mensajes de Discord en múltiples formatos</p>
+        </div>
+
+        <div class="content">
+            <!-- Estado de la API -->
+            <div class="api-status">
+                <div class="status-indicator" id="apiIndicator"></div>
+                <span id="apiStatus">Verificando conexión...</span>
+            </div>
+
+            <!-- Formulario -->
+            <form id="exportForm">
+                <!-- Token -->
+                <div class="form-group">
+                    <label for="token">🔑 Token de Discord</label>
+                    <input 
+                        type="password" 
+                        id="token" 
+                        name="token" 
+                        placeholder="Ingresa tu token de Discord"
+                        required
+                    >
+                    <small style="color: #666; margin-top: 5px; display: block;">
+                        Tu token será usado solo para esta solicitud y no se guardará
+                    </small>
+                </div>
+
+                <!-- Canal -->
+                <div class="form-group">
+                    <label for="channelId">📢 ID del Canal</label>
+                    <input 
+                        type="text" 
+                        id="channelId" 
+                        name="channelId" 
+                        placeholder="Ej: 123456789"
+                        required
+                    >
+                </div>
+
+                <!-- Filtrado de fechas -->
+                <div class="form-group">
+                    <label>📅 Filtrado por fechas (opcional)</label>
+                    <div class="form-row">
+                        <input 
+                            type="date" 
+                            id="startDate" 
+                            name="startDate"
+                            placeholder="Fecha de inicio"
+                        >
+                        <input 
+                            type="date" 
+                            id="endDate" 
+                            name="endDate"
+                            placeholder="Fecha de fin"
+                        >
+                    </div>
+                </div>
+
+                <!-- Nombre personalizado -->
+                <div class="form-group">
+                    <label for="customFilename">📝 Nombre personalizado (opcional)</label>
+                    <input 
+                        type="text" 
+                        id="customFilename" 
+                        name="customFilename"
+                        placeholder="Ej: mi_canal_especial"
+                    >
+                </div>
+
+                <!-- Formatos de exportación -->
+                <div class="form-group">
+                    <label>📄 Formatos de exportación</label>
+                    <div class="checkbox-group">
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="jsonRaw" name="formats" value="json_raw" checked>
+                            <label for="jsonRaw">JSON Raw</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="jsonl" name="formats" value="jsonl" checked>
+                            <label for="jsonl">JSONL</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="txt" name="formats" value="txt" checked>
+                            <label for="txt">TXT</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="csv" name="formats" value="csv" checked>
+                            <label for="csv">CSV</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="html" name="formats" value="html" checked>
+                            <label for="html">HTML</label>
+                        </div>
+                        <div class="checkbox-item">
+                            <input type="checkbox" id="discordKit" name="formats" value="discord_kit">
+                            <label for="discordKit">Discord Kit</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Opciones avanzadas -->
+                <div class="form-group">
+                    <label for="limit">⚙️ Límite por request (1-100)</label>
+                    <input 
+                        type="number" 
+                        id="limit" 
+                        name="limit"
+                        min="1"
+                        max="100"
+                        value="100"
+                    >
+                </div>
+
+                <!-- Botones -->
+                <div class="button-group">
+                    <button type="submit" class="btn-export" id="exportBtn">
+                        🚀 Exportar
+                    </button>
+                    <button type="reset" class="btn-reset">
+                        🔄 Limpiar
+                    </button>
+                </div>
+            </form>
+
+            <!-- Estado -->
+            <div class="status" id="status">
+                <h3 id="statusTitle"></h3>
+                <p id="statusMessage"></p>
+                <div class="file-list" id="fileList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:5000';
+        const form = document.getElementById('exportForm');
+        const statusDiv = document.getElementById('status');
+        const statusTitle = document.getElementById('statusTitle');
+        const statusMessage = document.getElementById('statusMessage');
+        const fileList = document.getElementById('fileList');
+        const exportBtn = document.getElementById('exportBtn');
+        const apiStatus = document.getElementById('apiStatus');
+        const apiIndicator = document.getElementById('apiIndicator');
+
+        // Verificar conexión con la API
+        async function checkApiConnection() {
+            try {
+                const response = await fetch(`${API_URL}/api/health`);
+                if (response.ok) {
+                    apiStatus.textContent = '✅ API conectada';
+                    apiIndicator.classList.add('connected');
+                    return true;
+                }
+            } catch (error) {
+                apiStatus.textContent = '❌ No se puede conectar a la API';
+                apiIndicator.classList.remove('connected');
+            }
+            return false;
+        }
+
+        // Verificar conexión al cargar
+        checkApiConnection();
+        setInterval(checkApiConnection, 5000);
+
+        // Mostrar estado
+        function showStatus(type, title, message) {
+            statusDiv.classList.remove('success', 'error', 'loading');
+            statusDiv.classList.add(type, 'show');
+            statusTitle.textContent = title;
+            statusMessage.textContent = message;
+            fileList.innerHTML = '';
+        }
+
+        // Manejar envío del formulario
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Validar que al menos haya un formato seleccionado
+            const selectedFormats = Array.from(document.querySelectorAll('input[name="formats"]:checked'));
+            if (selectedFormats.length === 0) {
+                showStatus('error', '❌ Error', 'Debes seleccionar al menos un formato de exportación');
+                return;
+            }
+
+            // Mostrar loading
+            exportBtn.disabled = true;
+            showStatus('loading', '⏳ Exportando...', 'Por favor espera mientras se exportan los mensajes');
+
+            try {
+                // Preparar datos
+                const formData = new FormData(form);
+                const payload = {
+                    token: formData.get('token'),
+                    channel_id: formData.get('channelId'),
+                    limit: parseInt(formData.get('limit')),
+                    export_json_raw: formData.getAll('formats').includes('json_raw'),
+                    export_jsonl: formData.getAll('formats').includes('jsonl'),
+                    export_txt: formData.getAll('formats').includes('txt'),
+                    export_csv: formData.getAll('formats').includes('csv'),
+                    export_html: formData.getAll('formats').includes('html'),
+                    format_discord_kit: formData.getAll('formats').includes('discord_kit')
+                };
+
+                if (formData.get('startDate')) {
+                    payload.start_date = formData.get('startDate');
+                }
+                if (formData.get('endDate')) {
+                    payload.end_date = formData.get('endDate');
+                }
+                if (formData.get('customFilename')) {
+                    payload.custom_filename = formData.get('customFilename');
+                }
+
+                // Enviar solicitud
+                const response = await fetch(`${API_URL}/api/export`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.status === 'success') {
+                    // Éxito
+                    showStatus(
+                        'success',
+                        '✅ ¡Exportación completada!',
+                        `Se exportaron ${result.total_messages} mensajes a la carpeta: ${result.output_dir}/`
+                    );
+
+                    // Mostrar archivos generados
+                    if (result.exported_files && result.exported_files.length > 0) {
+                        fileList.innerHTML = '<strong>Archivos generados:</strong><br>' +
+                            result.exported_files
+                                .map(file => `<div class="file-item">📄 ${file}</div>`)
+                                .join('');
+                    }
+
+                    // Limpiar formulario
+                    form.reset();
+                } else {
+                    // Error
+                    showStatus(
+                        'error',
+                        '❌ Error en la exportación',
+                        result.error || 'Ocurrió un error desconocido'
+                    );
+                }
+            } catch (error) {
+                showStatus(
+                    'error',
+                    '❌ Error de conexión',
+                    `No se pudo conectar a la API: ${error.message}`
+                );
+            } finally {
+                exportBtn.disabled = false;
+            }
+        });
+
+        // Limpiar al hacer reset
+        form.addEventListener('reset', () => {
+            statusDiv.classList.remove('show');
+        });
+    </script>
+</body>
+</html>
