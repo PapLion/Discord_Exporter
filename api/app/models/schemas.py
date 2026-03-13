@@ -69,3 +69,31 @@ class ErrorResponse(BaseModel):
     error: str
     code: int
     details: Optional[Dict[str, Any]] = None
+
+
+class JobStatusEnum(str, Enum):
+    """Job status enumeration"""
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class JobStatusResponse(BaseModel):
+    """Response model for job status endpoint"""
+    job_id: str = Field(..., description="Unique job identifier")
+    status: JobStatusEnum = Field(..., description="Job status")
+    progress: int = Field(0, ge=0, le=100, description="Progress percentage")
+    progress_message: str = Field("", description="Human-readable progress message")
+    result: Optional[Dict[str, Any]] = Field(None, description="Job result data when completed")
+    error: Optional[str] = Field(None, description="Error message if job failed")
+    created_at: datetime = Field(..., description="Job creation timestamp")
+    updated_at: datetime = Field(..., description="Last update timestamp")
+
+
+class ExportResponseAsync(BaseModel):
+    """Response model for async export endpoint"""
+    status: str = Field("accepted", description="Response status")
+    job_id: str = Field(..., description="Job ID for tracking the export")
+    message: str = Field(..., description="Status message")

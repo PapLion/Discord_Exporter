@@ -1,34 +1,138 @@
+"""
+Discord Exporter - Core module for exporting Discord channel messages.
+
+This module provides the DiscordExporter class with robust error handling,
+retries, rate limiting, and multiple export formats.
+
+Features:
+- Fetch channel information and messages from Discord API
+- Export to multiple formats: JSON, JSONL, TXT, CSV, HTML
+- Date-based filtering of messages
+- Progress saving for large exports
+- Comprehensive error handling
+"""
+
 import os
 import json
 import time
 import requests
 from datetime import datetime
-from typing import List, Dict, Optional, Union
-import re
-import logging
+from typing import List, Dict, Optional, Union, Any
 from pathlib import Path
+import logging
+import re
+import uuid
+
+# Optional import for typed Discord client
+try:
+    from app.infrastructure.discord_client import DiscordClient, Channel, Message
+    HAS_TYPED_CLIENT = True
+except ImportError:
+    HAS_TYPED_CLIENT = False
+    DiscordClient = None
+    Channel = None
+    Message = None
 
 logger = logging.getLogger(__name__)
+
 
 class DiscordExporter:
     """
     Core class for exporting Discord channel messages with robust error handling and retries.
+    
+    This class provides a synchronous interface for interacting with Discord's API
+    and exporting messages to various file formats.
+    
+    Attributes:
+        token: Discord bot or user token for authentication
+        max_retries: Maximum number of retry attempts for failed requests
+        retry_delay: Base delay between retries in seconds
+        timeout: Request timeout in seconds
+        use_typed_client: Whether to use the typed DiscordClient (if available)
+    
+    Example:
+        exporter = DiscordExporter(token="your-discord-token")
+        result = exporter.export_channel(
+            channel_id="123456789",
+            output_dir="exports",
+            limit=1000
+        )
     """
     
-    def __init__(self, token: str):
-        """Initialize the DiscordExporter with a Discord token."""
+    BASE_URL = "https://discord.com/api/v9"
+    
+    def __init__(
+        self,
+        token: str,
+        max_retries: int = 5,
+        retry_delay: float = 3.0,
+        timeout: float = 15.0,
+        use_typed_client: bool = False
+    ):
+        """
+        Initialize the DiscordExporter with a Discord token.
+        
+        Args:
+            token: Discord bot or user token
+            max_retries: Maximum number of retry attempts (default: 5)
+            retry_delay: Base delay between retries in seconds (default: 3.0)
+            timeout: Request timeout in seconds (default: 15.0)
+            use_typed_client: Whether to use typed DiscordClient (default: False)
+        """
         self.token = token
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+        self.timeout = timeout
+        self.use_typed_client = use_typed_client and HAS_TYPED_CLIENT
+        
+        # Headers for all requests
         self.headers = {"Authorization": token, "User-Agent": "DiscordExporter/1.0"}
-        self.base_url = "https://discord.com/api/v9"
+        self.base_url = self.BASE_URL
+        
+        # Create sync session
         self.session = requests.Session()
         self.session.headers.update(self.headers)
         
-        # Configuration
-        self.max_retries = 5
-        self.retry_delay = 3
-        self.timeout = 15
+        # Typed client (optional, for async operations)
+        self._discord_client: Optional[DiscordClient] = None
+        
+        logger.info(
+            "DiscordExporter initialized",
+            extra={
+                "use_typed_client": self.use_typed_client,
+                "max_retries": max_retries,
+                "timeout": timeout
+            }
+        )
     
-    def get_channel_info(self, channel_id: str) -> Dict:
+    @property
+    def discord_client(self) -> Optional[DiscordClient]:
+        """Get or create the typed DiscordClient instance."""
+        if self.use_typed_client and self._discord_client is None:
+            self._discord_client = DiscordClient(
+                token=self.token,
+                timeout=self.timeout,
+                max_retries=self.max_retries,
+                retry_delay=self.retry_delay,
+                correlation_id=str(uuid.uuid4())
+            )
+        return self._discord_client
+    
+    def close(self) -> None:
+        """Close the exporter and release resources."""
+        if self._discord_client is not None:
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(self._discord_client.close())
+                else:
+                    loop.run_until_complete(self._discord_client.close())
+            except RuntimeError:
+                asyncio.run(self._discord_client.close())
+            self._discord_client = None
+    
+    def get_channel_info(self, channel_id: str) -> Dict[str, Any]:
         """
         Fetch channel information with retries.
         
@@ -65,13 +169,34 @@ class DiscordExporter:
         
         raise Exception("Failed to fetch channel information after multiple attempts")
     
+    def get_channel(self, channel_id: str) -> Channel:
+        """
+        Fetch channel information using typed client.
+        
+        Args:
+            channel_id: The Discord channel ID
+            
+        Returns:
+            Channel object with typed fields
+            
+        Raises:
+            RuntimeError: If typed client is not enabled
+        """
+        if not self.use_typed_client or not self.discord_client:
+            raise RuntimeError("Typed client is not enabled. Set use_typed_client=True")
+        
+        import asyncio
+        return asyncio.get_event_loop().run_until_complete(
+            self.discord_client.get_channel(channel_id)
+        )
+    
     def fetch_messages(
         self, 
         channel_id: str, 
         limit: int = 100, 
         before: Optional[str] = None,
         after: Optional[str] = None
-    ) -> List[Dict]:
+    ) -> List[Dict[str, Any]]:
         """
         Fetch a batch of messages from a channel with retries and rate limit handling.
         
@@ -82,16 +207,80 @@ class DiscordExporter:
             after: Message ID to get messages after this ID
             
         Returns:
-            List of message objects
+            List of message dictionaries
             
         Raises:
             Exception: If the request fails after max retries
         """
-        params = {"limit": min(limit, 100)}  # Discord's max limit is 100
+        params: Dict[str, Any] = {"limit": min(limit, 100)}  # Discord's max limit is 100
         if before:
             params["before"] = before
         if after:
             params["after"] = after
+        
+        for attempt in range(self.max_retries):
+            try:
+                response = self.session.get(
+                    f"{self.base_url}/channels/{channel_id}/messages",
+                    params=params,
+                    timeout=self.timeout
+                )
+                
+                # Handle rate limiting
+                if response.status_code == 429:
+                    retry_after = response.json().get("retry_after", 5)
+                    logger.warning(f"Rate limited. Waiting {retry_after:.1f}s...")
+                    time.sleep(retry_after + 0.5)  # Add small buffer
+                    continue
+                
+                # Handle server errors with retry
+                if response.status_code in (500, 502, 503, 504):
+                    logger.warning(f"Server error {response.status_code}. Retry {attempt + 1}/{self.max_retries}...")
+                    time.sleep(self.retry_delay)
+                    continue
+                
+                # Handle other errors
+                response.raise_for_status()
+                
+                return response.json()
+                
+            except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
+                logger.warning(f"Request failed (attempt {attempt + 1}/{self.max_retries}): {str(e)}")
+                if attempt == self.max_retries - 1:
+                    raise
+                time.sleep(self.retry_delay)
+        
+        raise Exception("Failed to fetch messages after multiple attempts")
+    
+    def get_messages(
+        self,
+        channel_id: str,
+        limit: int = 100,
+        before: Optional[str] = None,
+        after: Optional[str] = None
+    ) -> List[Message]:
+        """
+        Fetch messages using typed client.
+        
+        Args:
+            channel_id: The Discord channel ID
+            limit: Number of messages to fetch (max 100)
+            before: Message ID to get messages before this ID
+            after: Message ID to get messages after this ID
+            
+        Returns:
+            List of Message objects
+            
+        Raises:
+            RuntimeError: If typed client is not enabled
+        """
+        if not self.use_typed_client or not self.discord_client:
+            raise RuntimeError("Typed client is not enabled. Set use_typed_client=True")
+        
+        import asyncio
+        return asyncio.get_event_loop().run_until_complete(
+            self.discord_client.get_messages(channel_id, limit, before, after)
+        )
         
         for attempt in range(self.max_retries):
             try:

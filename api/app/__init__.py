@@ -4,8 +4,11 @@ Discord Exporter API Application
 This module initializes the FastAPI application and sets up the API routes.
 """
 
-# Import the main FastAPI application
-from .main import app
+# Import the main FastAPI application lazily to avoid import errors when deps missing
+def __getattr__(name):
+    if name == "app":
+        from .main import app
+        return app
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-# This allows us to import the app directly from the app package
 __all__ = ["app"]
